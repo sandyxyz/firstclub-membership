@@ -1,0 +1,49 @@
+@baseUrl = http://localhost:8080
+@userId = user-101
+
+### Get membership plans
+GET {{baseUrl}}/api/plans
+Accept: application/json
+
+### Get membership tiers
+GET {{baseUrl}}/api/tiers
+Accept: application/json
+
+### Subscribe to a membership
+POST {{baseUrl}}/api/memberships/subscribe
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userId": "{{userId}}",
+  "planId": "monthly",
+  "tierId": "silver"
+}
+
+### Get current membership
+GET {{baseUrl}}/api/memberships/{{userId}}
+Accept: application/json
+
+### Upgrade or downgrade membership tier
+POST {{baseUrl}}/api/memberships/{{userId}}/change-tier
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tierId": "gold"
+}
+
+### Evaluate the user's eligible tier
+POST {{baseUrl}}/api/memberships/{{userId}}/evaluate-tier
+Content-Type: application/json
+Accept: application/json
+
+{
+  "monthlyOrderCount": 12,
+  "monthlyOrderValue": 20000,
+  "cohorts": ["vip"]
+}
+
+### Cancel membership
+POST {{baseUrl}}/api/memberships/{{userId}}/cancel
+Accept: application/json
