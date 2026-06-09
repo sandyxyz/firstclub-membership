@@ -25,6 +25,9 @@ public class TierEvaluationService {
             throw new ValidationException("tier evaluation request is required");
         }
         BigDecimal orderValue = request.monthlyOrderValue() == null ? BigDecimal.ZERO : request.monthlyOrderValue();
+        if (request.monthlyOrderCount() < 0 || orderValue.signum() < 0) {
+            throw new ValidationException("monthly order count and value cannot be negative");
+        }
         Set<String> cohorts = request.cohorts() == null ? Set.of() : request.cohorts();
 
         MembershipTier tier = catalogRepository.findTiers().stream()

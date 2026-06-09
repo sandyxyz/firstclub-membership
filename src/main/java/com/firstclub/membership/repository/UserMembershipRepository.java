@@ -24,6 +24,14 @@ public class UserMembershipRepository {
         return membership;
     }
 
+    public UserMembership replace(UserMembership expected, UserMembership replacement) {
+        boolean replaced = memberships.replace(expected.userId(), expected, replacement);
+        if (!replaced) {
+            throw new ConflictException("Membership was modified concurrently");
+        }
+        return replacement;
+    }
+
     public UserMembership save(UserMembership membership) {
         UserMembership current = memberships.get(membership.userId());
         if (current == null) {

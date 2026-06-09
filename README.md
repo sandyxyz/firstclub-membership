@@ -12,13 +12,16 @@ The solution focuses on clean domain modelling, modularity, extensibility, API u
 
 - Monthly, quarterly, and yearly membership plans
 - Silver, Gold, and Platinum tiers
-- Configurable tier criteria and benefits
+- YAML-configurable plans, tier criteria, and benefits
 - Subscribe, upgrade, downgrade, cancel, and track expiry
+- Resubscribe after cancellation or expiry
 - Tier evaluation using order count, order value, and user cohorts
+- Evaluate and automatically apply the eligible tier
+- Calculate membership discounts and delivery benefits at checkout
 - Per-user locking for concurrent membership operations
 - Optimistic version checks in the repository
 - Consistent REST error responses
-- Six automated tests, including a concurrent subscription test
+- Eleven automated tests, including configuration and concurrent subscription tests
 - Ready-to-run IntelliJ HTTP requests in `api-tests.http`
 
 ## Tech Stack
@@ -30,9 +33,10 @@ The solution focuses on clean domain modelling, modularity, extensibility, API u
 | API | Spring Web / REST |
 | Build | Maven |
 | Testing | JUnit 5, AssertJ |
+| Configuration | Type-safe Spring configuration properties and YAML |
 | Storage | Thread-safe in-memory repositories |
 
-The in-memory storage keeps the assignment easy to run and review. Repository boundaries allow it to be replaced with JPA, Redis, or another persistence layer without changing the API contract.
+The catalog is configured in `application.yml`, so plan prices, tier rules, cohorts, and benefits can change without editing business logic. In-memory storage keeps the assignment easy to run and review, while repository boundaries allow it to be replaced with JPA, Redis, or another persistence layer without changing the API contract.
 
 ## Architecture
 
@@ -41,9 +45,11 @@ flowchart LR
     Client["Client / IntelliJ HTTP Client"] --> Web["REST Controllers"]
     Web --> MembershipService["Membership Service"]
     Web --> TierService["Tier Evaluation Service"]
+    Web --> CheckoutService["Checkout Benefit Service"]
     MembershipService --> CatalogRepo["Catalog Repository"]
     MembershipService --> MembershipRepo["Membership Repository"]
     TierService --> CatalogRepo
+    CheckoutService --> MembershipService
     CatalogRepo --> Catalog["Plans, Tiers, Benefits, Criteria"]
     MembershipRepo --> Memberships["User Memberships"]
 ```
@@ -130,6 +136,8 @@ http://localhost:8080
 | `GET` | `/api/memberships/{userId}` | Get current membership and expiry |
 | `POST` | `/api/memberships/{userId}/change-tier` | Upgrade or downgrade a tier |
 | `POST` | `/api/memberships/{userId}/evaluate-tier` | Calculate the highest eligible tier |
+| `POST` | `/api/memberships/{userId}/evaluate-and-apply-tier` | Evaluate and atomically apply the eligible tier |
+| `POST` | `/api/memberships/{userId}/checkout-benefits` | Calculate delivery and discount benefits |
 | `POST` | `/api/memberships/{userId}/cancel` | Cancel an active membership |
 
 ## Example Flow
@@ -203,6 +211,45 @@ Content-Type: application/json
 }
 ```
 
+### 4. Apply eligibility automatically
+
+```http
+POST /api/memberships/user-101/evaluate-and-apply-tier
+Content-Type: application/json
+```
+
+The response includes the evaluated tier, whether the membership changed, and the updated membership. Evaluation and update execute under the same per-user lock.
+
+### 5. Calculate checkout benefits
+
+```http
+POST /api/memberships/user-101/checkout-benefits
+Content-Type: application/json
+```
+
+```json
+{
+  "orderValue": 2500,
+  "deliveryEligible": true,
+  "selectedItemsEligible": true
+}
+```
+
+Example response for a Gold member:
+
+```json
+{
+  "userId": "user-101",
+  "tierId": "gold",
+  "freeDelivery": true,
+  "discountPercent": 10,
+  "discountAmount": 250.00,
+  "payableOrderValue": 2250.00
+}
+```
+
+The real response also returns all benefits available to the tier.
+
 Example response:
 
 ```json
@@ -273,15 +320,20 @@ Covered scenarios:
 
 - Subscription creation and expiry calculation
 - Duplicate active subscription rejection
+- Resubscription after cancellation
 - Tier upgrade and version increment
+- Automatic eligible-tier application
 - Concurrent subscription attempts for the same user
 - Highest qualifying tier selection
 - Base-tier fallback when premium cohort rules do not match
+- Checkout discount and free-delivery calculation
+- Ineligible checkout component handling
+- Catalog loading from YAML
 
 Expected result:
 
 ```text
-Tests run: 6, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 11, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -295,7 +347,7 @@ The current implementation intentionally prioritizes a clear, demonstrable domai
 4. Integrate payment authorization and idempotency keys for subscriptions.
 5. Publish membership events through Kafka or another message broker.
 6. Add authentication and authorization through Spring Security.
-7. Move plan, tier, benefit, and criteria configuration to an admin-managed store.
+7. Move the YAML catalog configuration to an admin-managed store.
 8. Add OpenAPI documentation, observability, and container deployment.
 
 ## Important Demo Note

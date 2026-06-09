@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: firstclub-membership-program
+
+server:
+  port: 8080
+
+membership:
+  catalog:
+    plans:
+      - id: monthly
+        type: MONTHLY
+        price: 199.00
+        duration-months: 1
+        currency: INR
+      - id: quarterly
+        type: QUARTERLY
+        price: 499.00
+        duration-months: 3
+        currency: INR
+      - id: yearly
+        type: YEARLY
+        price: 1499.00
+        duration-months: 12
+        currency: INR
+    tiers:
+      - id: silver
+        name: Silver
+        rank: 1
+        criteria:
+          min-monthly-orders: 0
+          min-monthly-order-value: 0
+          allowed-cohorts: []
+        benefits:
+          - type: FREE_DELIVERY
+            description: Free delivery on eligible orders
+            value: 0
+          - type: EXTRA_DISCOUNT_PERCENT
+            description: Extra discount on selected categories
+            value: 5
+      - id: gold
+        name: Gold
+        rank: 2
+        criteria:
+          min-monthly-orders: 5
+          min-monthly-order-value: 5000
+          allowed-cohorts:
+            - power-shopper
+            - employee
+        benefits:
+          - type: FREE_DELIVERY
+            description: Free delivery on eligible orders
+            value: 0
+          - type: EXTRA_DISCOUNT_PERCENT
+            description: Extra discount on selected categories
+            value: 10
+          - type: EARLY_SALE_ACCESS
+            description: Early access to seasonal sales
+            value: 0
+      - id: platinum
+        name: Platinum
+        rank: 3
+        criteria:
+          min-monthly-orders: 10
+          min-monthly-order-value: 15000
+          allowed-cohorts:
+            - vip
+            - employee
+        benefits:
+          - type: FREE_DELIVERY
+            description: Free delivery with faster fulfilment
+            value: 0
+          - type: EXTRA_DISCOUNT_PERCENT
+            description: Highest discount on selected categories
+            value: 15
+          - type: EXCLUSIVE_DEALS
+            description: Access to exclusive member-only deals
+            value: 0
+          - type: PRIORITY_SUPPORT
+            description: Priority support queue
+            value: 0
+          - type: EXCLUSIVE_COUPONS
+            description: Monthly exclusive coupons
+            value: 0

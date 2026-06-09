@@ -44,6 +44,39 @@ Accept: application/json
   "cohorts": ["vip"]
 }
 
+### Evaluate and automatically apply the eligible tier
+POST {{baseUrl}}/api/memberships/{{userId}}/evaluate-and-apply-tier
+Content-Type: application/json
+Accept: application/json
+
+{
+  "monthlyOrderCount": 12,
+  "monthlyOrderValue": 20000,
+  "cohorts": ["vip"]
+}
+
+### Calculate membership benefits during checkout
+POST {{baseUrl}}/api/memberships/{{userId}}/checkout-benefits
+Content-Type: application/json
+Accept: application/json
+
+{
+  "orderValue": 2500,
+  "deliveryEligible": true,
+  "selectedItemsEligible": true
+}
+
 ### Cancel membership
 POST {{baseUrl}}/api/memberships/{{userId}}/cancel
 Accept: application/json
+
+### Resubscribe after cancellation
+POST {{baseUrl}}/api/memberships/subscribe
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userId": "{{userId}}",
+  "planId": "yearly",
+  "tierId": "silver"
+}

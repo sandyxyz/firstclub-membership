@@ -4,6 +4,9 @@ import com.firstclub.membership.domain.MembershipPlan;
 import com.firstclub.membership.domain.MembershipStatus;
 import com.firstclub.membership.domain.MembershipTier;
 import com.firstclub.membership.domain.UserMembership;
+import com.firstclub.membership.dto.TierApplicationResponse;
+import com.firstclub.membership.dto.TierEvaluationRequest;
+import com.firstclub.membership.dto.TierEvaluationResponse;
 import com.firstclub.membership.exception.ConflictException;
 import com.firstclub.membership.exception.NotFoundException;
 import com.firstclub.membership.exception.ValidationException;
@@ -24,29 +27,41 @@ import java.util.concurrent.locks.ReentrantLock;
 public class MembershipService {
     private final CatalogRepository catalogRepository;
     private final UserMembershipRepository membershipRepository;
+    private final TierEvaluationService tierEvaluationService;
     private final Clock clock;
     private final Map<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
 
     @Autowired
-    public MembershipService(CatalogRepository catalogRepository, UserMembershipRepository membershipRepository) {
-        this(catalogRepository, membershipRepository, Clock.systemUTC());
+    public MembershipService(
+            CatalogRepository catalogRepository,
+            UserMembershipRepository membershipRepository,
+            TierEvaluationService tierEvaluationService
+    ) {
+        this(catalogRepository, membershipRepository, tierEvaluationService, Clock.systemUTC());
     }
 
-    MembershipService(CatalogRepository catalogRepository, UserMembershipRepository membershipRepository, Clock clock) {
+    MembershipService(
+            CatalogRepository catalogRepository,
+            UserMembershipRepository membershipRepository,
+            TierEvaluationService tierEvaluationService,
+            Clock clock
+    ) {
         this.catalogRepository = catalogRepository;
         this.membershipRepository = membershipRepository;
+        this.tierEvaluationService = tierEvaluationService;
         this.clock = clock;
     }
 
     public UserMembership subscribe(String userId, String planId, String tierId) {
         validateUserId(userId);
+        validateRequiredId(planId, "planId");
+        validateRequiredId(tierId, "tierId");
         return withUserLock(userId, () -> {
             Instant now = clock.instant();
-            membershipRepository.findByUserId(userId)
-                    .filter(existing -> existing.isActive(now))
-                    .ifPresent(existing -> {
-                        throw new ConflictException("User already has an active membership");
-                    });
+            UserMembership existing = membershipRepository.findByUserId(userId).orElse(null);
+            if (existing != null && existing.isActive(now)) {
+                throw new ConflictException("User already has an active membership");
+            }
             MembershipPlan plan = catalogRepository.getPlan(planId);
             MembershipTier tier = catalogRepository.getTier(tierId);
             Instant expiresAt = now.atZone(ZoneOffset.UTC).plusMonths(plan.durationMonths()).toInstant();
@@ -57,14 +72,17 @@ public class MembershipService {
                     now,
                     expiresAt,
                     MembershipStatus.ACTIVE,
-                    0
+                    existing == null ? 0 : existing.version() + 1
             );
-            return membershipRepository.saveNew(membership);
+            return existing == null
+                    ? membershipRepository.saveNew(membership)
+                    : membershipRepository.replace(existing, membership);
         });
     }
 
     public UserMembership changeTier(String userId, String tierId) {
         validateUserId(userId);
+        validateRequiredId(tierId, "tierId");
         return withUserLock(userId, () -> {
             UserMembership current = activeMembership(userId);
             MembershipTier nextTier = catalogRepository.getTier(tierId);
@@ -81,6 +99,25 @@ public class MembershipService {
             UserMembership current = activeMembership(userId);
             return membershipRepository.save(current.cancelled());
         });
+    }
+
+    public TierApplicationResponse evaluateAndApplyTier(String userId, TierEvaluationRequest request) {
+        validateUserId(userId);
+        return withUserLock(userId, () -> {
+            UserMembership current = activeMembership(userId);
+            TierEvaluationResponse evaluation = tierEvaluationService.evaluate(request);
+            MembershipTier evaluatedTier = evaluation.eligibleTier();
+            if (Objects.equals(current.tier().id(), evaluatedTier.id())) {
+                return new TierApplicationResponse(current, evaluatedTier, false, evaluation.reason());
+            }
+            UserMembership updated = membershipRepository.save(current.withTier(evaluatedTier));
+            return new TierApplicationResponse(updated, evaluatedTier, true, evaluation.reason());
+        });
+    }
+
+    public UserMembership getActiveMembership(String userId) {
+        validateUserId(userId);
+        return activeMembership(userId);
     }
 
     public UserMembership getMembership(String userId) {
@@ -117,6 +154,12 @@ public class MembershipService {
     private void validateUserId(String userId) {
         if (userId == null || userId.isBlank()) {
             throw new ValidationException("userId is required");
+        }
+    }
+
+    private void validateRequiredId(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new ValidationException(fieldName + " is required");
         }
     }
 

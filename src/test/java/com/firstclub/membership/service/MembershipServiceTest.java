@@ -49,9 +49,11 @@ class MembershipServiceTest {
                 new TierCriteria(5, new BigDecimal("5000"), new CohortPolicy(Set.of("power-shopper"))),
                 List.of(new Benefit(BenefitType.EXTRA_DISCOUNT_PERCENT, "Discount", 10))
         ));
+        TierEvaluationService tierEvaluationService = new TierEvaluationService(catalog);
         service = new MembershipService(
                 catalog,
                 new UserMembershipRepository(),
+                tierEvaluationService,
                 Clock.fixed(Instant.parse("2026-06-08T08:00:00Z"), ZoneOffset.UTC)
         );
     }
@@ -82,6 +84,37 @@ class MembershipServiceTest {
 
         assertThat(upgraded.tier().id()).isEqualTo("gold");
         assertThat(upgraded.version()).isEqualTo(1);
+    }
+
+    @Test
+    void allowsResubscriptionAfterCancellation() {
+        service.subscribe("user-1", "monthly", "silver");
+        service.cancel("user-1");
+
+        UserMembership resubscribed = service.subscribe("user-1", "monthly", "gold");
+
+        assertThat(resubscribed.status()).isEqualTo(MembershipStatus.ACTIVE);
+        assertThat(resubscribed.tier().id()).isEqualTo("gold");
+        assertThat(resubscribed.version()).isEqualTo(2);
+    }
+
+    @Test
+    void evaluatesAndAppliesEligibleTier() {
+        service.subscribe("user-1", "monthly", "silver");
+
+        var result = service.evaluateAndApplyTier(
+                "user-1",
+                new com.firstclub.membership.dto.TierEvaluationRequest(
+                        7,
+                        new BigDecimal("7000"),
+                        Set.of("power-shopper")
+                )
+        );
+
+        assertThat(result.changed()).isTrue();
+        assertThat(result.evaluatedTier().id()).isEqualTo("gold");
+        assertThat(result.membership().tier().id()).isEqualTo("gold");
+        assertThat(result.membership().version()).isEqualTo(1);
     }
 
     @Test
